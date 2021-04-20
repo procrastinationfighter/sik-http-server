@@ -3,6 +3,10 @@
 
 #include <regex>
 
+#define syserr(mess) \
+    std::cerr << "ERROR: " << mess; \
+    exit_fail()
+
 const std::string &get_http_version_str();
 
 const std::string &get_CRLF();

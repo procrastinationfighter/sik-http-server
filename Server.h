@@ -31,8 +31,7 @@ class Server {
         : files_directory(std::move(files_dir)),
           correlated_servers_file(std::move(correlated_servers_file)) {;
         if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-            std::cerr << "Socket error.\n";
-            exit_fail();
+           syserr("Socket\n");
         }
 
         server_address.sin_family = AF_INET;
@@ -40,17 +39,14 @@ class Server {
         server_address.sin_port = htons(port);
 
         if (bind(sock, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
-            std::cerr << "Bind error.\n";
+            syserr("Bind\n");
             exit_fail();
         }
     }
 
     static void check_arg_count(int argc) {
         if (argc < 3 || argc > 5) {
-            std::cerr << "ERROR:\n"
-                      << "Program correct usage: "
-                      << "<PROGRAM> <SERVER_FILES_DIRECTORY> <CORRELATED_SERVERS_FILE> [OPT]<PORT>\n";
-            exit_fail();
+          syserr("Program correct usage: <PROGRAM> <SERVER_FILES_DIRECTORY> <CORRELATED_SERVERS_FILE> [OPT]<PORT>\n");
         }
     }
 
@@ -64,38 +60,41 @@ class Server {
                 throw std::invalid_argument("wrong port");
             }
         } catch (std::invalid_argument &e) {
-            std::cerr << "ERROR:\n"
-                      << "Given port is not valid.\n";
-            exit_fail();
+            syserr("Given port is not valid.\n");
         }
 
         return -1;
     }
 
-    void communicate_with_client() const {
+    void communicate_with_client(int msg_sock) const {
+        ssize_t len = 0;
+        char buffer[BUFFER_SIZE];
+        do {
+            len = read(msg_sock, buffer, sizeof(buffer));
+            if (len < 0) {
+                syserr("Reading from client socket.\n");
+            }
+            printf("read from socket: %zd bytes: %.*s\n", len, (int) len, buffer);
+        } while (len > 0);
+    }
+
+    void set_communicaion_with_client() const {
         int msg_sock;
         struct sockaddr_in client_address;
         socklen_t client_address_len;
-        char buffer[BUFFER_SIZE];
-        ssize_t len, snd_len;
 
         client_address_len = sizeof(client_address);
         // get client connection from the socket
         msg_sock = accept(sock, (struct sockaddr *) &client_address, &client_address_len);
-        do {
-            len = read(msg_sock, buffer, sizeof(buffer));
-            if (len < 0) {
-                std::cerr << "Error in reading from client socket.\n";
-                exit_fail();
-            }
+        if (msg_sock < 0) {
+            syserr("Accept\n");
+        }
 
-            printf("read from socket: %zd bytes: %.*s\n", len, (int) len, buffer);
-        } while (len > 0);
-        printf("ending connection\n");
+
+        communicate_with_client(msg_sock);
 
         if (close(msg_sock) < 0) {
-            std::cerr << "Socket close error.\n";
-            exit_fail();
+            syserr("Close\n");
         }
     }
 
@@ -114,12 +113,11 @@ class Server {
 
     [[noreturn]] void run() {
         if (listen(sock, QUEUE_LENGTH) < 0) {
-            std::cerr << "Listen error.\n";
-            exit_fail();
+            syserr("Listen\n");
         }
 
         for (;;) {
-            communicate_with_client();
+            set_communicaion_with_client();
         }
     }
 };
