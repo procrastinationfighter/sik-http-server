@@ -57,7 +57,7 @@ Server::Server(std::string &&files_dir,
     }
 }
 
-void Server::handle_http_request(const HttpRequest &request) const {
+void Server::handle_http_request(const HttpRequest &request, FILE *output) const {
     // [TODO]:
 }
 
@@ -72,10 +72,19 @@ void Server::communicate_with_client(int msg_sock) {
 
     try {
         HttpRequest request = parse_http_request(input_file);
-        handle_http_request(request);
+        handle_http_request(request, output_file);
+    } catch (ConnectionLost &e) {
+        // [TODO]: Write error code.
+        syserr("connection lost: " << e.what());
+    } catch (IncorrectRequestFormat &e) {
+        syserr("wrong request: " << e.what());
+    } catch (UnsupportedHttpMethod &e) {
+        syserr("unsupported method: " << e.what());
+    } catch (ServerInternalError &e) {
+        syserr("internal error: " << e.what());
     } catch (std::exception &e) {
         // [TODO]: Handle dis.
-        syserr("Exception caught");
+        syserr("Unexpected exception caught");
     }
 
 //    int ch;

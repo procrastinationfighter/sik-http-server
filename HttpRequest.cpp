@@ -5,7 +5,14 @@
 #define _GNU_SOURCE
 
 namespace {
-std::regex get_request_line_regex() {
+
+enum class Header {
+    CONNECTION,
+    CONTENT_LENGTH,
+    OTHER
+};
+
+std::regex &get_request_line_regex() {
     static std::regex regex(R"(([a-zA-Z]+) ([a-zA-Z0-9.\-\/]+) )"
                                 + get_http_version_str()
                                 + get_CRLF());
@@ -16,6 +23,29 @@ void make_string_lower(std::string &str) {
     for (auto &c : str) {
         c = static_cast<char>(tolower(c));
     }
+}
+
+Header string_to_header(std::string &str) {
+    static const std::string serv = "server",
+                             conn = "connection",
+                             con_type = "content-type",
+                             con_len = "content-length";
+    make_string_lower(str);
+    
+    if (str == conn) {
+        return Header::CONNECTION;
+    } else if (str == con_len) {
+        return Header::CONTENT_LENGTH;
+    } else {
+        return Header::OTHER;
+    }
+}
+
+std::regex &get_header_regex() {
+    // [TODO]: Field-value may cause problems later.
+    static std::regex regex(R"(([a-zA-Z0-9\-_]+):\s*([\ -~]*[!-~])\s*)"
+                                + get_CRLF());
+    return regex;
 }
 
 // Assumes that correct method is uppercase.
@@ -31,38 +61,97 @@ HttpRequest::Method string_to_method(const std::string &str) {
     }
 }
 
-size_t read_line(char **line, size_t *len, FILE *file) {
-    size_t read = getline(line, len, file);
+std::string read_line(FILE *file) {
+    char *line = nullptr;
+    size_t len = 0;
+    size_t read = getline(&line, &len, file);
 
     if (read == EOF) {
         throw ConnectionLost("EOF");
-    } else if (*line == nullptr) {
+    } else if (line == nullptr) {
         throw ServerInternalError("getline");
     } else {
-        return read;
+        std::string line_str(line);
+        free(line);
+        return line_str;
     }
 }
 
 std::pair<HttpRequest::Method, std::string> parse_request_line(FILE *input_file) {
     std::smatch match;
-    char *line = nullptr;
-    size_t len = 0;
 
-    size_t read = read_line(&line, &len, input_file);
-    std::string line_str(line);
-    free(line);
+    std::string line = read_line(input_file);
 
-    std::cout << "Read line: " << line_str;
+    // [TODO]: usunac
+    std::cout << "Read line: " << line;
 
-    std::regex_match(line_str, match, get_request_line_regex());
+    std::regex_match(line, match, get_request_line_regex());
     if (match.empty()) {
         std::cout << "request_line\n";
         throw IncorrectRequestFormat("request_line");
     }
 
+    // [TODO]: usunac
     std::cout << "Metoda: " << match[1] << ", zasob: " << match[2] << "\n";
 
     return {string_to_method(match[1]), match[2]};
+}
+
+// Returns true if Connection: Close header was included.
+bool parse_headers(FILE *input_file) {
+    static const std::string CONNECTION_CLOSE = "close",
+                             ZERO_VALUE_FIELD = "0";
+    bool finish = false,
+         close_connection = false,
+         was_connection = false,
+         was_content_length = false;
+    std::smatch match;
+
+    while(!finish) {
+        std::string line = read_line(input_file);
+        if (line == get_CRLF()) {
+            finish = true;
+        } else {
+            std::regex_match(line, match, get_header_regex());
+            if (match.empty()) {
+                throw IncorrectRequestFormat("header");
+            }
+
+            std::string field_name = match[1];
+            std::string field_value = match[2];
+
+            Header header_type = string_to_header(field_name);
+            switch (header_type) {
+                case Header::CONNECTION:
+                    if (was_connection) {
+                        throw IncorrectRequestFormat("double connection header");
+                    } else {
+                        was_connection = true;
+                        make_string_lower(field_value);
+                        if (field_value == CONNECTION_CLOSE) {
+                            close_connection = true;
+                        }
+                    }
+                case Header::CONTENT_LENGTH:
+                    if (was_content_length) {
+                        throw IncorrectRequestFormat("double content_length header");
+                    } else {
+                        was_content_length = true;
+                        make_string_lower(field_value);
+                        if(field_value != ZERO_VALUE_FIELD) {
+                            throw IncorrectRequestFormat("content_length wrong value");
+                        }
+                    }
+                    break;
+                case Header::OTHER:
+                    // We ignore other headers.
+                    break;
+            }
+
+        }
+    }
+
+    return close_connection;
 }
 }
 
@@ -80,6 +169,7 @@ std::pair<HttpRequest::Method, std::string> parse_request_line(FILE *input_file)
 
 HttpRequest parse_http_request(FILE *input_file) {
     auto start_result = parse_request_line(input_file);
+    bool close_connection = parse_headers(input_file);
 
-    return HttpRequest(start_result.first, start_result.second, false);
+    return HttpRequest(start_result.first, start_result.second, close_connection);
 }

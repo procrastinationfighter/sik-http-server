@@ -17,7 +17,7 @@ class Server {
 
     void communicate_with_client(int msg_sock);
     void set_communicaion_with_client();
-    void handle_http_request(const HttpRequest &request) const;
+    void handle_http_request(const HttpRequest &request, FILE *output) const;
 
   public:
     static Server create_from_program_arguments(int argc, char *argv[]);
