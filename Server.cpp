@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <cstring>
 #include <unistd.h>
+#include <fstream>
 
 static constexpr int DEFAULT_PORT = 8080;
 static constexpr int MAXIMAL_PORT_NUMBER = 65535;
@@ -31,34 +32,68 @@ int parse_port_argument(const std::string &argv) {
             throw std::invalid_argument("wrong port");
         }
     } catch (std::invalid_argument &e) {
-        syserr("Given port is not valid.\n");
+        syserr("Given port is not valid.");
     }
 
     return -1;
 }
 }
 
-Server::Server(std::string &&files_dir,
-               std::string &&correlated_servers_file,
-               int port)
-    : files_directory(std::move(files_dir)),
-      correlated_servers_file(std::move(correlated_servers_file)) {
-    if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-        syserr("Socket\n");
+SocketWrapper::SocketWrapper(int descriptor) : descriptor(descriptor) {}
+
+SocketWrapper::SocketWrapper(int port, struct sockaddr_in &server_address) {
+    if ((descriptor = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+        syserr("Socket");
     }
 
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(port);
 
-    if (bind(sock, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
-        syserr("Bind\n");
-        exit_fail();
+    if (bind(descriptor, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
+        syserr("Bind");
     }
 }
 
+SocketWrapper::~SocketWrapper() {
+    if (close(descriptor) < 0) {
+        syserr("Close");
+    }
+}
+
+int SocketWrapper::get_descriptor() const {
+    return descriptor;
+}
+
+Server::Server(std::string &&files_dir,
+               std::string &&correlated_servers_file,
+               int port)
+    : files_dir(std::move(files_dir)),
+      correlated_servers_file(std::move(correlated_servers_file)),
+      sock(port, server_address) {}
+
+bool Server::is_file_in_directory(const std::string &file_path) const {
+    // Checks if files directory is prefix of file_path.
+    auto res = std::mismatch(files_dir.begin(), files_dir.end(), file_path.begin());
+    return res.first == files_dir.end();
+}
+
 void Server::handle_http_request(const HttpRequest &request, FILE *output) const {
-    // [TODO]:
+    // Get path to the requested file.
+    std::string file_path = files_dir + request.get_request_target();
+    file_path = canonicalize_file_name(file_path.c_str());
+
+    if (is_file_in_directory(file_path)) {
+        std::ifstream file_stream;
+        file_stream.open(file_path);
+        if (file_stream.is_open()) {
+            // [TODO]: Send file.
+        } else {
+            // [TODO]: Check in correlated files.
+        }
+    } else {
+        // [TODO]: Send 404
+    }
 }
 
 void Server::communicate_with_client(int msg_sock) {
@@ -91,51 +126,48 @@ void Server::communicate_with_client(int msg_sock) {
         syserr("Unexpected exception caught");
     }
 
-//    int ch;
-//    while ((ch = fgetc(input_file)) != EOF) {
-//        std::cout << (char) ch;
-//        fputc(ch, output_file);
-//        fflush(output_file);
-//    }
-
     std::cout << "Communication with client finished.\n";
 }
 
 void Server::set_communicaion_with_client() {
     int msg_sock;
-    struct sockaddr_in client_address;
+    sockaddr_in client_address;
     socklen_t client_address_len;
 
     client_address_len = sizeof(client_address);
-    // get client connection from the socket
-    msg_sock = accept(sock, (struct sockaddr *) &client_address, &client_address_len);
+    msg_sock = accept(sock.get_descriptor(), (sockaddr *) &client_address, &client_address_len);
     if (msg_sock < 0) {
-        syserr("Accept\n");
+        syserr("Accept");
     }
+
+    SocketWrapper msg_socket_wrapper(msg_sock);
 
     communicate_with_client(msg_sock);
-
-    if (close(msg_sock) < 0) {
-        syserr("Close\n");
-    }
 }
 
 Server Server::create_from_program_arguments(int argc, char *argv[]) {
     check_arg_count(argc);
 
-    // [TODO]: Check other arguments.
+    char *normalized_dir = canonicalize_file_name(argv[1]);
+    char *normalized_file = canonicalize_file_name(argv[2]);
+
+    std::filesystem::path files_dir(normalized_dir);
 
     int port_number = (argc == 4 ? parse_port_argument(argv[3]) : DEFAULT_PORT);
 
-    return Server(std::string(argv[1]),
+    free(normalized_dir);
+    free(normalized_file);
+    return Server(files_dir,
                   std::string(argv[2]),
                   port_number);
 }
 
 [[noreturn]] void Server::run() {
-    if (listen(sock, QUEUE_LENGTH) < 0) {
+    if (listen(sock.get_descriptor(), QUEUE_LENGTH) < 0) {
         syserr("Listen\n");
     }
+
+    std::cout << "Started listening.\n";
 
     for (;;) {
         set_communicaion_with_client();
