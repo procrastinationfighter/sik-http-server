@@ -31,7 +31,7 @@ Header string_to_header(std::string &str) {
                              con_type = "content-type",
                              con_len = "content-length";
     make_string_lower(str);
-    
+
     if (str == conn) {
         return Header::CONNECTION;
     } else if (str == con_len) {
@@ -132,6 +132,7 @@ bool parse_headers(FILE *input_file) {
                             close_connection = true;
                         }
                     }
+                    break;
                 case Header::CONTENT_LENGTH:
                     if (was_content_length) {
                         throw IncorrectRequestFormat("double content_length header");
@@ -170,6 +171,6 @@ bool parse_headers(FILE *input_file) {
 HttpRequest parse_http_request(FILE *input_file) {
     auto start_result = parse_request_line(input_file);
     bool close_connection = parse_headers(input_file);
-
+    std::cout << "request parsed\n";
     return HttpRequest(start_result.first, start_result.second, close_connection);
 }

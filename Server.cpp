@@ -71,8 +71,12 @@ void Server::communicate_with_client(int msg_sock) {
     FILE *output_file = fdopen(msg_sock, "w");
 
     try {
-        HttpRequest request = parse_http_request(input_file);
-        handle_http_request(request, output_file);
+        bool close_conn = false;
+        while (!close_conn) {
+            HttpRequest request = parse_http_request(input_file);
+            handle_http_request(request, output_file);
+            close_conn = request.should_close_connection();
+        }
     } catch (ConnectionLost &e) {
         // [TODO]: Write error code.
         syserr("connection lost: " << e.what());

@@ -4,7 +4,7 @@
 #include <regex>
 
 #define syserr(mess) \
-    std::cerr << "ERROR: " << mess; \
+    std::cerr << "ERROR: " << mess << "\n"; \
     exit_fail()
 
 const std::string &get_http_version_str();
