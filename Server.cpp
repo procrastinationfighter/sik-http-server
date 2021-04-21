@@ -75,21 +75,15 @@ void Server::communicate_with_client(int msg_sock) {
         handle_http_request(request);
     } catch (std::exception &e) {
         // [TODO]: Handle dis.
+        syserr("Exception caught");
     }
 
-//        do {
-//            len = read(msg_sock, buffer, sizeof(buffer));
-//            if (len < 0) {
-//                syserr("Reading from client socket.\n");
-//            }
-//            printf("read from socket: %zd bytes: %.*s\n", len, (int) len, buffer);
-//        } while (len > 0);
-    int ch;
-    while ((ch = fgetc(input_file)) != EOF) {
-        std::cout << (char) ch;
-        fputc(ch, output_file);
-        fflush(output_file);
-    }
+//    int ch;
+//    while ((ch = fgetc(input_file)) != EOF) {
+//        std::cout << (char) ch;
+//        fputc(ch, output_file);
+//        fflush(output_file);
+//    }
 
     std::cout << "Communication with client finished.\n";
 }

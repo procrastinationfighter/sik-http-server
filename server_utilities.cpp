@@ -1,7 +1,7 @@
 #include "server_utilities.h"
 
 const std::string &get_http_version_str() {
-    static const std::string http_version = "HTTP/1.1";
+    static const std::string http_version = R"(HTTP\/1\.1)";
     return http_version;
 }
 

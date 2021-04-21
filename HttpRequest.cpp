@@ -1,10 +1,12 @@
+#include <iostream>
 #include "HttpRequest.h"
+#include "exceptions.h"
+
+#define _GNU_SOURCE
 
 namespace {
 std::regex get_request_line_regex() {
-    // We limit the method to 10 characters.
-    // I've never seen a longer method name.
-    static std::regex regex(R"((\w+){1, 10} ([a-zA-Z0-9.-/]+) )"
+    static std::regex regex(R"(([a-zA-Z]+) ([a-zA-Z0-9.\-\/]+) )"
                                 + get_http_version_str()
                                 + get_CRLF());
     return regex;
@@ -16,17 +18,26 @@ void make_string_lower(std::string &str) {
     }
 }
 
+// Assumes that correct method is uppercase.
 HttpRequest::Method string_to_method(const std::string &str) {
-
+    const static std::string get = "GET";
+    const static std::string head = "HEAD";
+    if (str == get) {
+        return HttpRequest::Method::GET;
+    } else if (str == head) {
+        return HttpRequest::Method::HEAD;
+    } else {
+        throw UnsupportedHttpMethod(str);
+    }
 }
 
 size_t read_line(char **line, size_t *len, FILE *file) {
     size_t read = getline(line, len, file);
 
     if (read == EOF) {
-        throw ConnectionLost("a");
+        throw ConnectionLost("EOF");
     } else if (*line == nullptr) {
-        throw std::runtime_error("getline");
+        throw ServerInternalError("getline");
     } else {
         return read;
     }
@@ -41,15 +52,17 @@ std::pair<HttpRequest::Method, std::string> parse_request_line(FILE *input_file)
     std::string line_str(line);
     free(line);
 
+    std::cout << "Read line: " << line_str;
+
     std::regex_match(line_str, match, get_request_line_regex());
     if (match.empty()) {
+        std::cout << "request_line\n";
         throw IncorrectRequestFormat("request_line");
     }
 
-    std::string method_str = match[1];
-    make_string_lower(method_str);
+    std::cout << "Metoda: " << match[1] << ", zasob: " << match[2] << "\n";
 
-    return {HttpRequest::string_to_method(method_str), match[2]};
+    return {string_to_method(match[1]), match[2]};
 }
 }
 

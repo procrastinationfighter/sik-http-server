@@ -1,10 +1,9 @@
 #ifndef SIK1__HTTPREQUEST_H_
 #define SIK1__HTTPREQUEST_H_
 
-#define _GNU_SOURCE
-
 #include <set>
 #include <cctype>
+#include <utility>
 #include "server_utilities.h"
 #include "exceptions.h"
 
@@ -12,8 +11,7 @@ class HttpRequest {
   public:
     enum class Method {
         GET,
-        HEAD,
-        OTHER
+        HEAD
     };
 
   private:
@@ -24,7 +22,7 @@ class HttpRequest {
   public:
     HttpRequest(Method method, std::string request_target, bool close_connection)
         : method(method),
-          request_target(request_target),
+          request_target(std::move(request_target)),
           close_connection(close_connection) {}
 
     [[nodiscard]] Method get_method() const;
