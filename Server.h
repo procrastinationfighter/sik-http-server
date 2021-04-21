@@ -9,7 +9,7 @@
 #include <cstring>
 #include <unistd.h>
 #include "server_utilities.h"
-
+#include "HttpRequest.h"
 
 class Server {
   private:
@@ -18,6 +18,8 @@ class Server {
 
     int sock;
     struct sockaddr_in server_address;
+
+    HttpRequestParser parser;
 
     static constexpr int DEFAULT_PORT = 8080;
     static constexpr int MAXIMAL_PORT_NUMBER = 65535;
@@ -29,7 +31,8 @@ class Server {
            std::string &&correlated_servers_file,
            int port)
         : files_directory(std::move(files_dir)),
-          correlated_servers_file(std::move(correlated_servers_file)) {;
+          correlated_servers_file(std::move(correlated_servers_file)),
+          parser() {
         if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
            syserr("Socket\n");
         }
@@ -66,19 +69,44 @@ class Server {
         return -1;
     }
 
-    void communicate_with_client(int msg_sock) const {
-        ssize_t len = 0;
-        char buffer[BUFFER_SIZE];
-        do {
-            len = read(msg_sock, buffer, sizeof(buffer));
-            if (len < 0) {
-                syserr("Reading from client socket.\n");
-            }
-            printf("read from socket: %zd bytes: %.*s\n", len, (int) len, buffer);
-        } while (len > 0);
+    void handle_http_request(const HttpRequest &request) const {
+        // [TODO]:
     }
 
-    void set_communicaion_with_client() const {
+    void communicate_with_client(int msg_sock) {
+        ssize_t len = 0;
+        char buffer[BUFFER_SIZE];
+
+        std::cout << "Communication with client started.\n";
+
+        FILE *input_file = fdopen(msg_sock, "r");
+        FILE *output_file = fdopen(msg_sock, "w");
+
+        try {
+            HttpRequest request = parser.parse(input_file);
+            handle_http_request(request);
+        } catch (std::exception &e) {
+            // [TODO]: Handle dis.
+        }
+
+//        do {
+//            len = read(msg_sock, buffer, sizeof(buffer));
+//            if (len < 0) {
+//                syserr("Reading from client socket.\n");
+//            }
+//            printf("read from socket: %zd bytes: %.*s\n", len, (int) len, buffer);
+//        } while (len > 0);
+        int ch;
+        while ((ch = fgetc(input_file)) != EOF) {
+            std::cout << (char) ch;
+            fputc(ch, output_file);
+            fflush(output_file);
+        }
+
+        std::cout << "Communication with client finished.\n";
+    }
+
+    void set_communicaion_with_client() {
         int msg_sock;
         struct sockaddr_in client_address;
         socklen_t client_address_len;
@@ -89,7 +117,6 @@ class Server {
         if (msg_sock < 0) {
             syserr("Accept\n");
         }
-
 
         communicate_with_client(msg_sock);
 
