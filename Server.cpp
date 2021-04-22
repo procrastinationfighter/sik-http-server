@@ -165,13 +165,15 @@ void Server::send_response_with_file(const HttpRequest &request,
 
     // We send message body only if the requested method is GET.
     if (request.get_method() == HttpRequest::Method::GET) {
-        // [TODO]: Handle error if sending failed.
         std::vector<char> buffer(BUFFER_SIZE);
         while (file_stream) {
             file_stream.read(buffer.data(), BUFFER_SIZE);
             std::streamsize s = file_stream ? BUFFER_SIZE : file_stream.gcount();
 
-            fwrite(buffer.data(), sizeof(char), s, output);
+            size_t x = fwrite(buffer.data(), sizeof(char), s, output);
+            if (x < s) {
+                throw ConnectionLost("fwrite failed.");
+            }
         }
     }
     fflush(output);

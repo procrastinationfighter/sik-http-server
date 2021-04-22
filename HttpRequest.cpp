@@ -13,6 +13,7 @@ enum class Header {
 };
 
 std::regex &get_request_line_regex() {
+    // [TODO]: Change accepted file.
     static std::regex regex(R"(([a-zA-Z]+) ([a-zA-Z0-9.\-\/]+) )"
                                 + get_http_version_regex_str()
                                 + get_CRLF());
@@ -42,7 +43,6 @@ Header string_to_header(std::string &str) {
 }
 
 std::regex &get_header_regex() {
-    // [TODO]: Field-value may cause problems later.
     static std::regex regex(R"(([a-zA-Z0-9\-_]+):\s*([\ -~]*[!-~])\s*)"
                                 + get_CRLF());
     return regex;
@@ -83,7 +83,6 @@ std::pair<HttpRequest::Method, std::string> parse_request_line(FILE *input_file)
     std::string line = read_line(input_file);
     std::regex_match(line, match, get_request_line_regex());
     if (match.empty()) {
-        std::cout << "request_line\n";
         throw IncorrectRequestFormat("request_line");
     }
 
