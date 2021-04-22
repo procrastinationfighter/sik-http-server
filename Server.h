@@ -6,6 +6,8 @@
 #include "server_utilities.h"
 #include "HttpRequest.h"
 
+using correlated_server = std::pair<std::string, int>;
+
 class SocketWrapper {
   private:
     int descriptor;
@@ -19,22 +21,23 @@ class SocketWrapper {
 class Server {
   private:
     std::string files_dir;
-    std::string correlated_servers_file;
+    std::map<std::string, correlated_server> correlated_server_files;
 
     SocketWrapper sock;
     struct sockaddr_in server_address;
 
-    Server(std::string files_dir, std::string &&correlated_servers_file, int port);
+    Server(std::string files_dir, const std::string& correlated_servers_file, int port);
 
     static void send_start_line_and_headers(std::ostringstream &oss, FILE *output);
     bool is_file_in_directory(const std::string &file_path) const;
     static void send_response_with_file(const HttpRequest &request,
                                         FILE *output,
                                         const std::string &file_path_string);
+    void check_correlated_files(const HttpRequest &request, FILE *output) const;
     void handle_http_request(const HttpRequest &request, FILE *output) const;
     static void send_fail_response(int status_code, FILE *output);
     void communicate_with_client(int msg_sock);
-    void set_communicaion_with_client();
+    void set_communication_with_client();
 
   public:
     static Server create_from_program_arguments(int argc, char *argv[]);

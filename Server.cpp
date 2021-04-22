@@ -60,6 +60,14 @@ void add_server_header(std::ostringstream &oss) {
     oss << "Server: ab417730_student_server" << get_CRLF();
 }
 
+void add_location_header(std::ostringstream &oss,
+                         const std::string &request_target,
+                         const correlated_server& serv_info) {
+    oss << "Location: " << get_prot()
+        << serv_info.first << ":" << serv_info.second
+        << request_target << get_CRLF();
+}
+
 void add_status_line_and_obligatory_headers(std::ostringstream &oss,
                                             int status_code) {
     add_status_line(oss, status_code);
@@ -99,11 +107,27 @@ int SocketWrapper::get_descriptor() const {
 }
 
 Server::Server(std::string files_dir,
-               std::string &&correlated_servers_file,
+               const std::string& correlated_servers_file,
                int port)
     : files_dir(std::move(files_dir)),
-      correlated_servers_file(std::move(correlated_servers_file)),
-      sock(port, server_address) {}
+      sock(port, server_address) {
+    std::ifstream corr_file(correlated_servers_file);
+    if (corr_file.is_open()) {
+        try {
+            std::string file, foreign_server, foreign_port;
+            while (corr_file >> file >> foreign_server >> foreign_port) {
+                if (correlated_server_files.find(file) == correlated_server_files.end()) {
+                    correlated_server_files.insert({file,
+                                                    {foreign_server, std::stoi(foreign_port)}});
+                }
+            }
+        } catch (std::exception &e) {
+            syserr("Failed parsing file correlated servers: " << e.what());
+        }
+    } else {
+        syserr("Opening file with correlated servers failed.");
+    }
+}
 
 void Server::send_start_line_and_headers(std::ostringstream &oss, FILE *output) {
     oss << get_CRLF();
@@ -133,6 +157,7 @@ void Server::send_response_with_file(const HttpRequest &request,
 
     add_status_line_and_obligatory_headers(oss, RESPONSE_OK);
     add_content_length_header(oss, std::filesystem::file_size(file_path_string));
+    add_content_type_header(oss);
     if (request.should_close_connection()) {
         add_close_connection_header(oss);
     }
@@ -152,12 +177,39 @@ void Server::send_response_with_file(const HttpRequest &request,
     fflush(output);
 }
 
+void Server::check_correlated_files(const HttpRequest &request, FILE *output) const {
+    std::cout << "Checking correlated files... ";
+
+    std::ostringstream oss;
+    auto serv_iter = correlated_server_files.find(request.get_request_target());
+
+    if (serv_iter == correlated_server_files.end()) {
+        std::cout << "Not found." << std::endl;
+        add_status_line_and_obligatory_headers(oss, RESPONSE_NOT_FOUND);
+    } else {
+        std::cout << "Found!" << std::endl;
+        add_status_line_and_obligatory_headers(oss, RESPONSE_FOUND);
+        add_location_header(oss,
+                            request.get_request_target(),
+                            serv_iter->second);
+    }
+
+    if (request.should_close_connection()) {
+        add_close_connection_header(oss);
+    }
+
+    send_start_line_and_headers(oss, output);
+    fflush(output);
+}
+
 void Server::handle_http_request(const HttpRequest &request, FILE *output) const {
     // Get path to the requested file.
     std::string file_path = files_dir + request.get_request_target();
     char *file_path_canon = canonicalize_file_name(file_path.c_str());
     if (file_path_canon == nullptr) {
-        // [TODO]: File not found, check correlated.
+        std::cout << "File " << request.get_request_target() << " not found. ";
+        check_correlated_files(request, output);
+        return;
     }
 
     std::string file_path_string(file_path_canon);
@@ -166,17 +218,15 @@ void Server::handle_http_request(const HttpRequest &request, FILE *output) const
     if (is_file_in_directory(file_path_string)) {
         try {
             send_response_with_file(request, output, file_path_string);
-            return;
         } catch (FileOpeningError &e) {
-            std::cout << "Local file could not be opened." << std::endl;
+            std::cout << "Local file could not be opened. " << std::endl;
+            check_correlated_files(request, output);
         }
     } else {
         std::cout << "File: " << file_path_string
                   << " not in directory: " << files_dir << std::endl;
+        check_correlated_files(request, output);
     }
-
-    // [TODO]: If we get here, we should check correlated files.
-    std::cout << "Checking correlated files..." << std::endl;
 }
 
 void Server::send_fail_response(int status_code, FILE *output) {
@@ -196,7 +246,6 @@ void Server::communicate_with_client(int msg_sock) {
     try {
         bool close_conn = false;
         while (!close_conn) {
-            std::cout << "Dzialamy.\n";
             HttpRequest request = parse_http_request(input_file);
             handle_http_request(request, output_file);
             close_conn = request.should_close_connection();
@@ -221,7 +270,7 @@ void Server::communicate_with_client(int msg_sock) {
     std::cout << "Communication with client finished." << std::endl;
 }
 
-void Server::set_communicaion_with_client() {
+void Server::set_communication_with_client() {
     int msg_sock;
     sockaddr_in client_address;
     socklen_t client_address_len;
@@ -245,14 +294,12 @@ Server Server::create_from_program_arguments(int argc, char *argv[]) {
         syserr("Given directory with files not found.");
     }
     std::string files_dir(normalized_dir);
-    char *normalized_file = canonicalize_file_name(argv[2]);
 
     int port_number = (argc == 4 ? parse_port_argument(argv[3]) : DEFAULT_PORT);
 
     free(normalized_dir);
-    free(normalized_file);
     return Server(files_dir,
-                  std::string(argv[2]),
+                  argv[2],
                   port_number);
 }
 
@@ -264,6 +311,6 @@ Server Server::create_from_program_arguments(int argc, char *argv[]) {
     std::cout << "Started listening.\n";
 
     for (;;) {
-        set_communicaion_with_client();
+        set_communication_with_client();
     }
 }

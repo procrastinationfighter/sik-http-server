@@ -20,6 +20,8 @@ const std::string &get_http_version_regex_str();
 
 const std::string &get_CRLF();
 
+const std::string &get_prot();
+
 const std::string &get_methods_str();
 
 const std::string &get_request_target_str();

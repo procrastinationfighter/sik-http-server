@@ -10,6 +10,11 @@ const std::string &get_http_version_regex_str() {
     return http_version;
 }
 
+const std::string &get_prot() {
+    static const std::string prot = "http://";
+    return prot;
+}
+
 const std::string &get_CRLF() {
     static const std::string CRLF = "\r\n";
     return CRLF;
