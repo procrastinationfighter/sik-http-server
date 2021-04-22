@@ -37,6 +37,28 @@ int parse_port_argument(const std::string &argv) {
 
     return -1;
 }
+
+void add_status_line(std::ostringstream &oss, int status_code) {
+    oss << get_http_version_str() << " "
+        << status_code << " "
+        << get_reason_phrase(status_code) << get_CRLF();
+}
+
+void add_close_connection_header(std::ostringstream &oss) {
+    oss << "Connection: close" << get_CRLF();
+}
+
+void add_content_length_header(std::ostringstream &oss, const std::string &file_path) {
+    oss << "Content-Length: " << std::filesystem::file_size(file_path) << get_CRLF();
+}
+
+void add_content_type_header(std::ostringstream &oss) {
+    oss << "Content-Type: application/octet-stream" << get_CRLF();
+}
+
+void add_server_header(std::ostringstream &oss) {
+    oss << "Server: ab417730_student_server" << get_CRLF();
+}
 }
 
 SocketWrapper::SocketWrapper(int descriptor) : descriptor(descriptor) {}
@@ -65,7 +87,7 @@ int SocketWrapper::get_descriptor() const {
     return descriptor;
 }
 
-Server::Server(std::string &&files_dir,
+Server::Server(std::string files_dir,
                std::string &&correlated_servers_file,
                int port)
     : files_dir(std::move(files_dir)),
@@ -75,25 +97,46 @@ Server::Server(std::string &&files_dir,
 bool Server::is_file_in_directory(const std::string &file_path) const {
     // Checks if files directory is prefix of file_path.
     auto res = std::mismatch(files_dir.begin(), files_dir.end(), file_path.begin());
-    return res.first == files_dir.end();
+    return (res.first == files_dir.end())
+        && (res.second != file_path.end())
+        && (*res.second == '/');
+}
+
+void Server::send_response_with_file(const HttpRequest &request,
+                                     FILE *output,
+                                     const std::string &file_path_string) {
+    std::ifstream file_stream;
+    file_stream.open(file_path_string);
+
+    if (!file_stream.is_open()) {
+        throw FileOpeningError();
+    }
+
+    std::ostringstream oss;
+
 }
 
 void Server::handle_http_request(const HttpRequest &request, FILE *output) const {
     // Get path to the requested file.
     std::string file_path = files_dir + request.get_request_target();
-    file_path = canonicalize_file_name(file_path.c_str());
-
-    if (is_file_in_directory(file_path)) {
-        std::ifstream file_stream;
-        file_stream.open(file_path);
-        if (file_stream.is_open()) {
-            // [TODO]: Send file.
-        } else {
-            // [TODO]: Check in correlated files.
-        }
-    } else {
-        // [TODO]: Send 404
+    char *file_path_canon = canonicalize_file_name(file_path.c_str());
+    if (file_path_canon == nullptr) {
+        // [TODO]: File not found, check correlated.
     }
+
+    std::string file_path_string(file_path_canon);
+    free(file_path_canon);
+
+    if (is_file_in_directory(file_path_string)) {
+        try {
+            send_response_with_file(request, output, file_path_string);
+            return;
+        } catch (FileOpeningError &e) {
+            std::cout << "Local file could not be opened. Checking correlated files...\n";
+        }
+    }
+
+    // [TODO]: If we get here, we should check correlated files.
 }
 
 void Server::communicate_with_client(int msg_sock) {
@@ -149,9 +192,11 @@ Server Server::create_from_program_arguments(int argc, char *argv[]) {
     check_arg_count(argc);
 
     char *normalized_dir = canonicalize_file_name(argv[1]);
+    if (normalized_dir == nullptr) {
+        syserr("Given directory with files not found.");
+    }
+    std::string files_dir(normalized_dir);
     char *normalized_file = canonicalize_file_name(argv[2]);
-
-    std::filesystem::path files_dir(normalized_dir);
 
     int port_number = (argc == 4 ? parse_port_argument(argv[3]) : DEFAULT_PORT);
 

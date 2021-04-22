@@ -24,9 +24,12 @@ class Server {
     SocketWrapper sock;
     struct sockaddr_in server_address;
 
-    Server(std::string &&files_dir, std::string &&correlated_servers_file, int port);
+    Server(std::string files_dir, std::string &&correlated_servers_file, int port);
 
     bool is_file_in_directory(const std::string &file_path) const;
+    static void send_response_with_file(const HttpRequest &request,
+                                 FILE *output,
+                                 const std::string &file_path_string);
     void handle_http_request(const HttpRequest &request, FILE *output) const;
     void communicate_with_client(int msg_sock);
     void set_communicaion_with_client();

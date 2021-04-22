@@ -23,4 +23,9 @@ class ServerInternalError : public std::runtime_error {
     explicit ServerInternalError(const std::string &str) : std::runtime_error(str) {}
 };
 
+class FileOpeningError : public std::exception {
+  public:
+    explicit FileOpeningError() : std::exception() {}
+};
+
 #endif //SIK1__EXCEPTIONS_H_
