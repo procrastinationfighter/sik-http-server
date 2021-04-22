@@ -12,7 +12,7 @@ static constexpr int DEFAULT_PORT = 8080;
 static constexpr int MAXIMAL_PORT_NUMBER = 65535;
 static constexpr int MINIMAL_PORT_NUMBER = 1024;
 static constexpr int QUEUE_LENGTH = 5;
-static constexpr int BUFFER_SIZE = 1500;
+static constexpr int BUFFER_SIZE = 1400;
 
 namespace {
 void check_arg_count(int argc) {
@@ -48,8 +48,8 @@ void add_close_connection_header(std::ostringstream &oss) {
     oss << "Connection: close" << get_CRLF();
 }
 
-void add_content_length_header(std::ostringstream &oss, const std::string &file_path) {
-    oss << "Content-Length: " << std::filesystem::file_size(file_path) << get_CRLF();
+void add_content_length_header(std::ostringstream &oss, uintmax_t size) {
+    oss << "Content-Length: " << size << get_CRLF();
 }
 
 void add_content_type_header(std::ostringstream &oss) {
@@ -58,6 +58,19 @@ void add_content_type_header(std::ostringstream &oss) {
 
 void add_server_header(std::ostringstream &oss) {
     oss << "Server: ab417730_student_server" << get_CRLF();
+}
+
+void add_status_line_and_obligatory_headers(std::ostringstream &oss,
+                                            const HttpRequest &request,
+                                            int status_code) {
+    add_status_line(oss, status_code);
+    add_server_header(oss);
+    if (request.should_close_connection()
+        || status_code == RESPONSE_BAD_REQUEST
+        || status_code == RESPONSE_NOT_IMPLEMENTED
+        || status_code == RESPONSE_INTERNAL_ERROR) {
+        add_close_connection_header(oss);
+    }
 }
 }
 
@@ -114,9 +127,33 @@ void Server::send_response_with_file(const HttpRequest &request,
 
     std::ostringstream oss;
 
+    add_status_line_and_obligatory_headers(oss, request, RESPONSE_OK);
+    add_content_length_header(oss, std::filesystem::file_size(file_path_string));
+    oss << get_CRLF();
+
+    std::string first_part_of_response = oss.str();
+    fputs(first_part_of_response.c_str(), output);
+    std::cout << "Before loop" << "\n";
+
+    // [TODO] Only if GET!
+    std::vector<char> buffer(BUFFER_SIZE + 1);
+    while (file_stream) {
+        std::cout << "Czytamy z pliku...\n";
+        file_stream.read(buffer.data(), BUFFER_SIZE);
+        std::streamsize s = file_stream ? BUFFER_SIZE : file_stream.gcount();
+        buffer[s] = '\0';
+        std::cout.write(buffer.data(), s);
+        std::cout << "\n";
+        fputs(buffer.data(), output);
+//        fwrite(buffer.data(), sizeof(char), s, output);
+    }
+
+    fflush(output);
+    std::cout << "After loop" << "\n";
 }
 
 void Server::handle_http_request(const HttpRequest &request, FILE *output) const {
+    std::cout << "Getting over it\n";
     // Get path to the requested file.
     std::string file_path = files_dir + request.get_request_target();
     char *file_path_canon = canonicalize_file_name(file_path.c_str());
@@ -134,6 +171,8 @@ void Server::handle_http_request(const HttpRequest &request, FILE *output) const
         } catch (FileOpeningError &e) {
             std::cout << "Local file could not be opened. Checking correlated files...\n";
         }
+    } else {
+        std::cout << "File: " << file_path_string << " not in directory " << files_dir << "\n";
     }
 
     // [TODO]: If we get here, we should check correlated files.
@@ -151,6 +190,7 @@ void Server::communicate_with_client(int msg_sock) {
     try {
         bool close_conn = false;
         while (!close_conn) {
+            std::cout << "Dzialamy.\n";
             HttpRequest request = parse_http_request(input_file);
             handle_http_request(request, output_file);
             close_conn = request.should_close_connection();

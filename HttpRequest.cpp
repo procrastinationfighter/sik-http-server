@@ -14,7 +14,7 @@ enum class Header {
 
 std::regex &get_request_line_regex() {
     static std::regex regex(R"(([a-zA-Z]+) ([a-zA-Z0-9.\-\/]+) )"
-                                + get_http_version_str()
+                                + get_http_version_regex_str()
                                 + get_CRLF());
     return regex;
 }

@@ -16,6 +16,8 @@ constexpr int RESPONSE_NOT_IMPLEMENTED = 501;
 
 const std::string &get_http_version_str();
 
+const std::string &get_http_version_regex_str();
+
 const std::string &get_CRLF();
 
 const std::string &get_methods_str();
