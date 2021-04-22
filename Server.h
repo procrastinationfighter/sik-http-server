@@ -26,11 +26,13 @@ class Server {
 
     Server(std::string files_dir, std::string &&correlated_servers_file, int port);
 
+    static void send_start_line_and_headers(std::ostringstream &oss, FILE *output);
     bool is_file_in_directory(const std::string &file_path) const;
     static void send_response_with_file(const HttpRequest &request,
-                                 FILE *output,
-                                 const std::string &file_path_string);
+                                        FILE *output,
+                                        const std::string &file_path_string);
     void handle_http_request(const HttpRequest &request, FILE *output) const;
+    static void send_fail_response(int status_code, FILE *output);
     void communicate_with_client(int msg_sock);
     void set_communicaion_with_client();
 

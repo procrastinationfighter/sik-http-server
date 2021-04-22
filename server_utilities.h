@@ -4,7 +4,7 @@
 #include <regex>
 
 #define syserr(mess) \
-    std::cerr << "ERROR: " << mess << "\n"; \
+    std::cerr << "ERROR: " << mess << std::endl; \
     exit_fail()
 
 constexpr int RESPONSE_OK = 200;

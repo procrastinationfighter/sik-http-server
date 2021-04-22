@@ -61,12 +61,10 @@ void add_server_header(std::ostringstream &oss) {
 }
 
 void add_status_line_and_obligatory_headers(std::ostringstream &oss,
-                                            const HttpRequest &request,
                                             int status_code) {
     add_status_line(oss, status_code);
     add_server_header(oss);
-    if (request.should_close_connection()
-        || status_code == RESPONSE_BAD_REQUEST
+    if (status_code == RESPONSE_BAD_REQUEST
         || status_code == RESPONSE_NOT_IMPLEMENTED
         || status_code == RESPONSE_INTERNAL_ERROR) {
         add_close_connection_header(oss);
@@ -107,6 +105,12 @@ Server::Server(std::string files_dir,
       correlated_servers_file(std::move(correlated_servers_file)),
       sock(port, server_address) {}
 
+void Server::send_start_line_and_headers(std::ostringstream &oss, FILE *output) {
+    oss << get_CRLF();
+    std::string first_part_of_response = oss.str();
+    fputs(first_part_of_response.c_str(), output);
+}
+
 bool Server::is_file_in_directory(const std::string &file_path) const {
     // Checks if files directory is prefix of file_path.
     auto res = std::mismatch(files_dir.begin(), files_dir.end(), file_path.begin());
@@ -127,33 +131,28 @@ void Server::send_response_with_file(const HttpRequest &request,
 
     std::ostringstream oss;
 
-    add_status_line_and_obligatory_headers(oss, request, RESPONSE_OK);
+    add_status_line_and_obligatory_headers(oss, RESPONSE_OK);
     add_content_length_header(oss, std::filesystem::file_size(file_path_string));
-    oss << get_CRLF();
-
-    std::string first_part_of_response = oss.str();
-    fputs(first_part_of_response.c_str(), output);
-    std::cout << "Before loop" << "\n";
-
-    // [TODO] Only if GET!
-    std::vector<char> buffer(BUFFER_SIZE + 1);
-    while (file_stream) {
-        std::cout << "Czytamy z pliku...\n";
-        file_stream.read(buffer.data(), BUFFER_SIZE);
-        std::streamsize s = file_stream ? BUFFER_SIZE : file_stream.gcount();
-        buffer[s] = '\0';
-        std::cout.write(buffer.data(), s);
-        std::cout << "\n";
-        fputs(buffer.data(), output);
-//        fwrite(buffer.data(), sizeof(char), s, output);
+    if (request.should_close_connection()) {
+        add_close_connection_header(oss);
     }
+    send_start_line_and_headers(oss, output);
 
+    // We send message body only if the requested method is GET.
+    if (request.get_method() == HttpRequest::Method::GET) {
+        // [TODO]: Handle error if sending failed.
+        std::vector<char> buffer(BUFFER_SIZE);
+        while (file_stream) {
+            file_stream.read(buffer.data(), BUFFER_SIZE);
+            std::streamsize s = file_stream ? BUFFER_SIZE : file_stream.gcount();
+
+            fwrite(buffer.data(), sizeof(char), s, output);
+        }
+    }
     fflush(output);
-    std::cout << "After loop" << "\n";
 }
 
 void Server::handle_http_request(const HttpRequest &request, FILE *output) const {
-    std::cout << "Getting over it\n";
     // Get path to the requested file.
     std::string file_path = files_dir + request.get_request_target();
     char *file_path_canon = canonicalize_file_name(file_path.c_str());
@@ -169,24 +168,31 @@ void Server::handle_http_request(const HttpRequest &request, FILE *output) const
             send_response_with_file(request, output, file_path_string);
             return;
         } catch (FileOpeningError &e) {
-            std::cout << "Local file could not be opened. Checking correlated files...\n";
+            std::cout << "Local file could not be opened." << std::endl;
         }
     } else {
-        std::cout << "File: " << file_path_string << " not in directory " << files_dir << "\n";
+        std::cout << "File: " << file_path_string
+                  << " not in directory: " << files_dir << std::endl;
     }
 
     // [TODO]: If we get here, we should check correlated files.
+    std::cout << "Checking correlated files..." << std::endl;
+}
+
+void Server::send_fail_response(int status_code, FILE *output) {
+    std::ostringstream oss;
+    add_status_line_and_obligatory_headers(oss, status_code);
+    send_start_line_and_headers(oss, output);
+    fflush(output);
 }
 
 void Server::communicate_with_client(int msg_sock) {
-    ssize_t len = 0;
-    char buffer[BUFFER_SIZE];
-
-    std::cout << "Communication with client started.\n";
+    std::cout << "Communication with client started." << std::endl;
 
     FILE *input_file = fdopen(msg_sock, "r");
     FILE *output_file = fdopen(msg_sock, "w");
 
+    // Caught exceptions are related with severing the connection.
     try {
         bool close_conn = false;
         while (!close_conn) {
@@ -195,21 +201,24 @@ void Server::communicate_with_client(int msg_sock) {
             handle_http_request(request, output_file);
             close_conn = request.should_close_connection();
         }
-    } catch (ConnectionLost &e) {
-        // [TODO]: Write error code.
-        syserr("connection lost: " << e.what());
     } catch (IncorrectRequestFormat &e) {
-        syserr("wrong request: " << e.what());
+        std::cerr << "Bad request: " << e.what() << std::endl;
+        send_fail_response(RESPONSE_BAD_REQUEST, output_file);
     } catch (UnsupportedHttpMethod &e) {
-        syserr("unsupported method: " << e.what());
+        std::cerr << "Unsupported method: " << e.what() << std::endl;
+        send_fail_response(RESPONSE_NOT_IMPLEMENTED, output_file);
     } catch (ServerInternalError &e) {
-        syserr("internal error: " << e.what());
+        std::cerr << "Internal error: " << e.what() << std::endl;
+        send_fail_response(RESPONSE_INTERNAL_ERROR, output_file);
+    } catch (ConnectionLost &e) {
+        // Nothing else happens. Go handle the next client.
+        std::cerr << "connection lost: " << e.what() << std::endl;
     } catch (std::exception &e) {
-        // [TODO]: Handle dis.
-        syserr("Unexpected exception caught");
+        // Again, nothing happens. Cut the connection.
+        std::cerr << "Unexpected exception caught: " << e.what() << std::endl;
     }
 
-    std::cout << "Communication with client finished.\n";
+    std::cout << "Communication with client finished." << std::endl;
 }
 
 void Server::set_communicaion_with_client() {

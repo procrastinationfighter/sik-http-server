@@ -81,18 +81,11 @@ std::pair<HttpRequest::Method, std::string> parse_request_line(FILE *input_file)
     std::smatch match;
 
     std::string line = read_line(input_file);
-
-    // [TODO]: usunac
-    std::cout << "Read line: " << line;
-
     std::regex_match(line, match, get_request_line_regex());
     if (match.empty()) {
         std::cout << "request_line\n";
         throw IncorrectRequestFormat("request_line");
     }
-
-    // [TODO]: usunac
-    std::cout << "Metoda: " << match[1] << ", zasob: " << match[2] << "\n";
 
     return {string_to_method(match[1]), match[2]};
 }
@@ -171,6 +164,5 @@ bool parse_headers(FILE *input_file) {
 HttpRequest parse_http_request(FILE *input_file) {
     auto start_result = parse_request_line(input_file);
     bool close_connection = parse_headers(input_file);
-    std::cout << "request parsed\n";
     return HttpRequest(start_result.first, start_result.second, close_connection);
 }
