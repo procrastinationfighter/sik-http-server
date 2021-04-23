@@ -76,7 +76,6 @@ std::string read_line(FILE *file) {
     } else if (line == nullptr) {
         throw ServerInternalError("getline");
     } else {
-        std::cout << read_res << std::endl;
         std::string line_str(line, read_res);
         free(line);
         return line_str;
