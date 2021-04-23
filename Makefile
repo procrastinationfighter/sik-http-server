@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -Wextra -std=c++17 -O2
+CFLAGS = -Wall -Wextra -pedantic -std=c++17 -O2 -lstdc++fs
 
 .PHONY: all clean
 

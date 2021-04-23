@@ -171,7 +171,7 @@ void Server::send_response_with_file(const HttpRequest &request,
             file_stream.read(buffer.data(), BUFFER_SIZE);
             std::streamsize s = file_stream ? BUFFER_SIZE : file_stream.gcount();
 
-            size_t x = fwrite(buffer.data(), sizeof(char), s, output);
+            ssize_t x = fwrite(buffer.data(), sizeof(char), s, output);
             if (x < s) {
                 throw ConnectionLost("fwrite failed.");
             }

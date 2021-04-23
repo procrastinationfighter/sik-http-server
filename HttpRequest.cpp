@@ -2,8 +2,9 @@
 #include "HttpRequest.h"
 #include "exceptions.h"
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-
+#endif
 namespace {
 
 enum class Header {
@@ -13,7 +14,7 @@ enum class Header {
 };
 
 std::regex &get_request_line_regex() {
-    static std::regex regex(R"(([a-zA-Z]+) (\/[^\ ]*) )"
+    static std::regex regex(R"(([a-zA-Z]+) (\/[^ ]*) )"
                                 + get_http_version_regex_str()
                                 + get_CRLF());
     return regex;
@@ -68,14 +69,15 @@ HttpRequest::Method string_to_method(const std::string &str) {
 std::string read_line(FILE *file) {
     char *line = nullptr;
     size_t len = 0;
-    size_t read = getline(&line, &len, file);
+    ssize_t read_res = getline(&line, &len, file);
 
-    if (read == EOF) {
+    if (read_res == EOF) {
         throw ConnectionLost("EOF");
     } else if (line == nullptr) {
         throw ServerInternalError("getline");
     } else {
-        std::string line_str(line);
+        std::cout << read_res << std::endl;
+        std::string line_str(line, read_res);
         free(line);
         return line_str;
     }
