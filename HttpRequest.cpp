@@ -13,8 +13,7 @@ enum class Header {
 };
 
 std::regex &get_request_line_regex() {
-    // [TODO]: Change accepted file.
-    static std::regex regex(R"(([a-zA-Z]+) ([\ -~]+) )"
+    static std::regex regex(R"(([a-zA-Z]+) (\/[^\ ]*) )"
                                 + get_http_version_regex_str()
                                 + get_CRLF());
     return regex;

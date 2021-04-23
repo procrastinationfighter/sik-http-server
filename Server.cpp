@@ -7,6 +7,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <fstream>
+#include <csignal>
 
 static constexpr int DEFAULT_PORT = 8080;
 static constexpr int MAXIMAL_PORT_NUMBER = 65535;
@@ -323,6 +324,7 @@ Server Server::create_from_program_arguments(int argc, char *argv[]) {
 }
 
 [[noreturn]] void Server::run() {
+    signal(SIGPIPE, SIG_IGN);
     if (listen(sock.get_descriptor(), QUEUE_LENGTH) < 0) {
         syserr("Listen\n");
     }
