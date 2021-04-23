@@ -34,8 +34,12 @@ class TargetFileIncorrectCharacters : public std::exception {
   public:
     explicit TargetFileIncorrectCharacters(bool close_conn) : close_conn(close_conn) {}
 
-    bool should_close() const {
+    [[nodiscard]] bool should_close() const {
         return close_conn;
+    }
+
+    virtual const char* what() const noexcept {
+        return "Target file contained incorrect characters.";
     }
 };
 

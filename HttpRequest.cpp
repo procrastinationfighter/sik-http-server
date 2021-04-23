@@ -1,4 +1,3 @@
-#include <iostream>
 #include "HttpRequest.h"
 #include "exceptions.h"
 
