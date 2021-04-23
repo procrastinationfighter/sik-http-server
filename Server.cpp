@@ -238,6 +238,27 @@ void Server::send_fail_response(int status_code, FILE *output) {
     fflush(output);
 }
 
+bool Server::read_and_handle_request(FILE *input_file, FILE* output_file) {
+    bool continue_connection = true;
+    try {
+        HttpRequest request = parse_http_request(input_file);
+        handle_http_request(request, output_file);
+        continue_connection = !request.should_close_connection();
+    } catch (TargetFileIncorrectCharacters &e) {
+        std::ostringstream oss;
+        add_status_line_and_obligatory_headers(oss, RESPONSE_NOT_FOUND);
+        if (e.should_close()) {
+            add_close_connection_header(oss);
+            continue_connection = false;
+        }
+
+        send_start_line_and_headers(oss, output_file);
+        fflush(output_file);
+    }
+
+    return continue_connection;
+}
+
 void Server::communicate_with_client(int msg_sock) {
     std::cout << "Communication with client started." << std::endl;
 
@@ -246,12 +267,8 @@ void Server::communicate_with_client(int msg_sock) {
 
     // Caught exceptions are related with severing the connection.
     try {
-        bool close_conn = false;
-        while (!close_conn) {
-            HttpRequest request = parse_http_request(input_file);
-            handle_http_request(request, output_file);
-            close_conn = request.should_close_connection();
-        }
+        while (read_and_handle_request(input_file, output_file));
+            // Empty loop body.
     } catch (IncorrectRequestFormat &e) {
         std::cerr << "Bad request: " << e.what() << std::endl;
         send_fail_response(RESPONSE_BAD_REQUEST, output_file);

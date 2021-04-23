@@ -14,10 +14,15 @@ enum class Header {
 
 std::regex &get_request_line_regex() {
     // [TODO]: Change accepted file.
-    static std::regex regex(R"(([a-zA-Z]+) ([a-zA-Z0-9.\-\/]+) )"
+    static std::regex regex(R"(([a-zA-Z]+) ([\ -~]+) )"
                                 + get_http_version_regex_str()
                                 + get_CRLF());
     return regex;
+}
+
+bool is_target_file_correct(const std::string &target_file) {
+    static std::regex regex(R"([a-zA-Z0-9.\-\/]+)");
+    return std::regex_match(target_file, regex);
 }
 
 void make_string_lower(std::string &str) {
@@ -163,5 +168,8 @@ bool parse_headers(FILE *input_file) {
 HttpRequest parse_http_request(FILE *input_file) {
     auto start_result = parse_request_line(input_file);
     bool close_connection = parse_headers(input_file);
+    if (!is_target_file_correct(start_result.second)) {
+        throw TargetFileIncorrectCharacters(close_connection);
+    }
     return HttpRequest(start_result.first, start_result.second, close_connection);
 }

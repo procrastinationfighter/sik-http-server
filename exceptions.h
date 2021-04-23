@@ -28,4 +28,15 @@ class FileOpeningError : public std::exception {
     explicit FileOpeningError() : std::exception() {}
 };
 
+class TargetFileIncorrectCharacters : public std::exception {
+  private:
+    const bool close_conn;
+  public:
+    explicit TargetFileIncorrectCharacters(bool close_conn) : close_conn(close_conn) {}
+
+    bool should_close() const {
+        return close_conn;
+    }
+};
+
 #endif //SIK1__EXCEPTIONS_H_

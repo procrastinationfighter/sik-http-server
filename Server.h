@@ -36,6 +36,7 @@ class Server {
     void check_correlated_files(const HttpRequest &request, FILE *output) const;
     void handle_http_request(const HttpRequest &request, FILE *output) const;
     static void send_fail_response(int status_code, FILE *output);
+    bool read_and_handle_request(FILE *input_file, FILE* output_file);
     void communicate_with_client(int msg_sock);
     void set_communication_with_client();
 
