@@ -152,15 +152,15 @@ bool parse_headers(FILE *input_file) {
 }
 }
 
-[[nodiscard]] HttpRequest::Method HttpRequest::get_method() const {
+HttpRequest::Method HttpRequest::get_method() const {
     return method;
 }
 
-[[nodiscard]] const std::string &HttpRequest::get_request_target() const {
+const std::string &HttpRequest::get_request_target() const {
     return request_target;
 }
 
-[[nodiscard]] bool HttpRequest::should_close_connection() const {
+bool HttpRequest::should_close_connection() const {
     return close_connection;
 }
 

@@ -240,7 +240,7 @@ void Server::send_fail_response(int status_code, FILE *output) {
     fflush(output);
 }
 
-bool Server::read_and_handle_request(FILE *input_file, FILE* output_file) {
+bool Server::read_and_handle_request(FILE *input_file, FILE* output_file) const {
     bool continue_connection = true;
     try {
         HttpRequest request = parse_http_request(input_file);
@@ -261,7 +261,7 @@ bool Server::read_and_handle_request(FILE *input_file, FILE* output_file) {
     return continue_connection;
 }
 
-void Server::communicate_with_client(int msg_sock) {
+void Server::communicate_with_client(int msg_sock) const {
     std::cout << "Communication with client started." << std::endl;
 
     FILE *input_file = fdopen(msg_sock, "r");
@@ -291,7 +291,7 @@ void Server::communicate_with_client(int msg_sock) {
     std::cout << "Communication with client finished." << std::endl;
 }
 
-void Server::set_communication_with_client() {
+void Server::set_communication_with_client() const {
     int msg_sock;
     sockaddr_in client_address;
     socklen_t client_address_len;
@@ -324,7 +324,7 @@ Server Server::create_from_program_arguments(int argc, char *argv[]) {
                   port_number);
 }
 
-[[noreturn]] void Server::run() {
+[[noreturn]] void Server::run() const {
     signal(SIGPIPE, SIG_IGN);
     if (listen(sock.get_descriptor(), QUEUE_LENGTH) < 0) {
         syserr("Listen\n");
